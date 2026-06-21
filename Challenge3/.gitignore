@@ -19,6 +19,12 @@ build/
 # Testing coverage
 coverage/
 
+# TypeScript build cache
+tsconfig.tsbuildinfo
+
+# Scratch/temp files
+*.txt
+
 # IDE configs and OS files
 .idea/
 .vscode/

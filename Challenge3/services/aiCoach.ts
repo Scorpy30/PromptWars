@@ -4,10 +4,13 @@ import { CarbonBreakdown } from "@/core/engine/carbonEngine";
 
 // Models to try in order of preference (fallback chain)
 const MODEL_FALLBACK_CHAIN = [
+    'gemini-2.0-flash',
     'gemini-1.5-flash',
     'gemini-1.5-flash-8b',
     'gemini-1.5-pro',
 ];
+
+const GEMINI_API_VERSION = 'v1beta';
 
 /**
  * Enterprise Service Layer generating personalized reduction strategies.
@@ -39,7 +42,7 @@ Emissions Breakdown (kg CO2e / month):
 
     // Try each model in the fallback chain
     for (const model of MODEL_FALLBACK_CHAIN) {
-        const endpoint = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${encodeURIComponent(primaryKey)}`;
+        const endpoint = `https://generativelanguage.googleapis.com/${GEMINI_API_VERSION}/models/${model}:generateContent?key=${encodeURIComponent(primaryKey)}`;
 
         try {
             const response = await fetch(endpoint, {
