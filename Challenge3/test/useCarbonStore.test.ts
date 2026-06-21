@@ -44,6 +44,20 @@ describe('Carbon Platform Zustand Store Integration tests', () => {
         expect(state.breakdown.housingEmissions).toBe(183); // 77 + 106
     });
 
+    test('should sanitize negative metric inputs to zero', () => {
+        useCarbonStore.getState().updateMetrics({
+            electricityKwh: -50,
+            naturalGasTherms: -10,
+            gasolineGallons: -5
+        });
+
+        const state = useCarbonStore.getState();
+        expect(state.metrics.electricityKwh).toBe(0);
+        expect(state.metrics.naturalGasTherms).toBe(0);
+        expect(state.metrics.gasolineGallons).toBe(0);
+        expect(state.breakdown.totalEmissions).toBe(160); // Diet medium baseline is 160
+    });
+
     test('should add completed habits and increment eco points score', () => {
         useCarbonStore.getState().completeHabit('Recycled plastic and waste products', 10);
         
