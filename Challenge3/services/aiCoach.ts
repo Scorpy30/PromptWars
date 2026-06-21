@@ -18,12 +18,7 @@ export async function getPersonalizedInsights(
         return "Demo Mode Active: Please input your Gemini API Key in the UI placeholder panel or configure the server `.env` to load interactive AI recommendations.";
     }
 
-    // Validate key basic structure (prevent injection in query string)
-    if (!/^[a-zA-Z0-9_-]+$/.test(primaryKey)) {
-        return "Security Warning: Invalid Gemini API key characters detected.";
-    }
-
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${primaryKey}`;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(primaryKey)}`;
 
     const structuralPrompt = {
         contents: [{
