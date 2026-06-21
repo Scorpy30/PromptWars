@@ -42,12 +42,15 @@ Emissions Breakdown (kg CO2e / month):
 
     // Try each model in the fallback chain
     for (const model of MODEL_FALLBACK_CHAIN) {
-        const endpoint = `https://generativelanguage.googleapis.com/${GEMINI_API_VERSION}/models/${model}:generateContent?key=${encodeURIComponent(primaryKey)}`;
+        const endpoint = `https://generativelanguage.googleapis.com/${GEMINI_API_VERSION}/models/${model}:generateContent`;
 
         try {
             const response = await fetch(endpoint, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': primaryKey
+                },
                 body,
                 next: { revalidate: 3600 },
             });

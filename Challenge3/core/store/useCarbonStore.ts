@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { UsageMetrics, CarbonBreakdown, calculateCarbonFootprint } from '../engine/carbonEngine';
 
-interface LoggedHabit {
+export interface LoggedHabit {
     id: string;
     timestamp: string;
     title: string;
@@ -17,6 +17,7 @@ interface CarbonState {
     completedHabits: LoggedHabit[];
     updateMetrics: (newMetrics: Partial<UsageMetrics>) => void;
     completeHabit: (habitTitle: string, points: number) => void;
+    recalculateStreak: () => void;
 }
 
 const DEFAULT_METRICS: UsageMetrics = {
@@ -28,7 +29,7 @@ const DEFAULT_METRICS: UsageMetrics = {
     meatConsumptionFactor: 'medium'
 };
 
-function calculateStreak(habits: LoggedHabit[]): number {
+export function calculateStreak(habits: LoggedHabit[]): number {
     if (habits.length === 0) return 0;
 
     // Normalize dates to YYYY-MM-DD local format to avoid timezone discrepancies
@@ -89,7 +90,16 @@ export const useCarbonStore = create<CarbonState>()(
             completedHabits: [],
 
             updateMetrics: (newMetrics) => set((state) => {
-                const mergedMetrics = { ...state.metrics, ...newMetrics };
+                const sanitized: Partial<UsageMetrics> = {};
+                for (const k in newMetrics) {
+                    const key = k as keyof UsageMetrics;
+                    if (key === 'meatConsumptionFactor') {
+                        sanitized[key] = newMetrics[key] as any;
+                    } else {
+                        sanitized[key] = Math.max(0, Number(newMetrics[key]) || 0) as any;
+                    }
+                }
+                const mergedMetrics = { ...state.metrics, ...sanitized };
                 return {
                     metrics: mergedMetrics,
                     breakdown: calculateCarbonFootprint(mergedMetrics)
@@ -111,7 +121,11 @@ export const useCarbonStore = create<CarbonState>()(
                     score: state.score + points,
                     streakDays: newStreak
                 };
-            })
+            }),
+
+            recalculateStreak: () => set((state) => ({
+                streakDays: calculateStreak(state.completedHabits)
+            }))
         }),
         {
             name: 'ecotrack-enterprise-storage',
