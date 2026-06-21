@@ -2,61 +2,80 @@
 
 import { CarbonBreakdown } from "@/core/engine/carbonEngine";
 
+// Models to try in order of preference (fallback chain)
+const MODEL_FALLBACK_CHAIN = [
+    'gemini-1.5-flash',
+    'gemini-1.5-flash-8b',
+    'gemini-1.5-pro',
+];
+
 /**
  * Enterprise Service Layer generating personalized reduction strategies.
- * Implements an optional placeholder header authorization allowing judges to inject custom API keys.
+ * Implements a model fallback chain and optional judge API key override.
  */
 export async function getPersonalizedInsights(
     breakdown: CarbonBreakdown,
     judgeApiKeyOverride?: string
 ): Promise<string> {
-    // Graceful handling of API keys without client leaking
     const rawKey = judgeApiKeyOverride || process.env.GEMINI_API_KEY || '';
     const primaryKey = rawKey.trim();
 
     if (!primaryKey) {
-        return "Demo Mode Active: Please input your Gemini API Key in the UI placeholder panel or configure the server `.env` to load interactive AI recommendations.";
+        return "Demo Mode Active: Please configure the GEMINI_API_KEY in your `.env` file to enable AI-powered recommendations.";
     }
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(primaryKey)}`;
+    const promptText = `You are an expert Sustainability Coach. Analyze this carbon footprint and generate 3 sharp, hyper-actionable mitigation steps.
+Keep responses professional, encouraging, structured in clean markdown bullet points, and concise (under 250 words total).
 
-    const structuralPrompt = {
-        contents: [{
-            parts: [{
-                text: `You are an expert Sustainability Coach. Analyze this carbon footprint payload and generate 3 sharp, hyper-actionable mitigation steps to reduce their emissions. 
-                Keep responses professional, encouraging, highly structured in clean markdown bullet points, and concise (under 250 words total).
-                
-                Emissions Breakdown (kg CO2e / month):
-                - Housing: ${breakdown.housingEmissions} kg
-                - Transport: ${breakdown.transportEmissions} kg
-                - Diet/Lifestyle: ${breakdown.lifestyleEmissions} kg
-                - Total aggregated footprint: ${breakdown.totalEmissions} kg`
-            }]
-        }]
-    };
+Emissions Breakdown (kg CO2e / month):
+- Housing: ${breakdown.housingEmissions} kg
+- Transport: ${breakdown.transportEmissions} kg
+- Diet/Lifestyle: ${breakdown.lifestyleEmissions} kg
+- Total footprint: ${breakdown.totalEmissions} kg`;
 
-    try {
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(structuralPrompt),
-            next: { revalidate: 3600 } // Cache results for 1 hour to maximize operational efficiency
-        });
+    const body = JSON.stringify({
+        contents: [{ parts: [{ text: promptText }] }]
+    });
 
-        if (!response.ok) {
-            console.error(`Gemini API error: ${response.status} ${response.statusText}`);
-            throw new Error('Upstream provider validation exception.');
+    // Try each model in the fallback chain
+    for (const model of MODEL_FALLBACK_CHAIN) {
+        const endpoint = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${encodeURIComponent(primaryKey)}`;
+
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body,
+                next: { revalidate: 3600 },
+            });
+
+            if (response.status === 429) {
+                // Rate limited on this model — try next in chain
+                console.warn(`Rate limited on ${model}, trying next model...`);
+                continue;
+            }
+
+            if (response.status === 404) {
+                // Model not available — try next
+                console.warn(`Model ${model} not found, trying next...`);
+                continue;
+            }
+
+            if (!response.ok) {
+                const errorBody = await response.text();
+                console.error(`Gemini API error on ${model}: ${response.status}`, errorBody);
+                continue;
+            }
+
+            const data = await response.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) return text;
+
+        } catch (err) {
+            console.error(`Network error with model ${model}:`, err);
+            continue;
         }
-
-        const data = await response.json();
-        
-        if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-            return data.candidates[0].content.parts[0].text;
-        }
-        
-        throw new Error('Malformed API response structure.');
-    } catch (error) {
-        console.error("Failed to generate AI insights:", error);
-        return "Execution fallback: Unable to generate live suggestions. Verify network connections, billing status, or custom evaluation API keys.";
     }
+
+    return "⚠️ All Gemini models are currently rate-limited or unavailable. This is a free-tier quota issue — please wait a minute and try again, or upgrade your Google AI Studio plan at https://ai.google.dev/";
 }
